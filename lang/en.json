@@ -1,0 +1,20 @@
+{
+  "NAD": {
+    "Settings": {
+      "Enabled": {
+        "Name": "Skip Automated Animations when BLFX animates",
+        "Hint": "When Boss Loot FX is going to animate an item, effect or condition, Automated Animations doesn't play its own animation for it."
+      },
+      "MatchMode": {
+        "Name": "What counts as a duplicate",
+        "Hint": "Same activity: Automated Animations is skipped if BLFX animates the activity at any moment (attack, damage, use, template, summon). Same moment only: it is skipped only if BLFX animates that exact moment, so an Automated Animations damage animation still plays when BLFX only animates the attack. Effects are always compared with BLFX effect animations.",
+        "Activity": "Same activity (recommended)",
+        "Trigger": "Same moment only"
+      },
+      "Debug": {
+        "Name": "Debug logging",
+        "Hint": "Write every skipped and allowed Automated Animations animation to the browser console."
+      }
+    }
+  }
+}

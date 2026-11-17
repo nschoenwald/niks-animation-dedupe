@@ -1,0 +1,20 @@
+{
+  "NAD": {
+    "Settings": {
+      "Enabled": {
+        "Name": "Automated Animations überspringen, wenn BLFX animiert",
+        "Hint": "Wenn Boss Loot FX ein Item, einen Effekt oder einen Zustand animiert, spielt Automated Animations dafür keine eigene Animation ab."
+      },
+      "MatchMode": {
+        "Name": "Was als doppelt gilt",
+        "Hint": "Gleiche Aktivität: Automated Animations wird übersprungen, wenn BLFX die Aktivität zu irgendeinem Zeitpunkt animiert (Angriff, Schaden, Einsatz, Schablone, Beschwörung). Nur gleicher Zeitpunkt: Es wird nur übersprungen, wenn BLFX genau diesen Zeitpunkt animiert, sodass eine Schadensanimation von Automated Animations weiterhin abgespielt wird, wenn BLFX nur den Angriff animiert. Effekte werden immer mit den Effektanimationen von BLFX verglichen.",
+        "Activity": "Gleiche Aktivität (empfohlen)",
+        "Trigger": "Nur gleicher Zeitpunkt"
+      },
+      "Debug": {
+        "Name": "Debug-Ausgabe",
+        "Hint": "Jede übersprungene und erlaubte Animation von Automated Animations in der Browser-Konsole ausgeben."
+      }
+    }
+  }
+}
