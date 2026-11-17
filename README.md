@@ -1,8 +1,8 @@
 # Nik's Animation Dedupe
 
-Use Automated Animations and Boss Loot FX together without seeing two animations for one action. Whenever Boss Loot FX
-is going to animate an item, effect or condition, Automated Animations stays quiet. Everything Boss Loot FX doesn't
-animate still gets its Automated Animations animation, so you can keep your full Automated Animations setup.
+Use Automated Animations and Boss Loot FX together without seeing two animations for one action. When both would
+animate the same item, effect or condition, only the module you give priority plays (Boss Loot FX by default).
+Everything it doesn't animate still gets the other module's animation, so you can keep both setups complete.
 
 - Foundry VTT 14
 - D&D 5e
@@ -17,7 +17,7 @@ In Foundry, go to **Add-on Modules → Install Module** and paste this manifest 
 https://github.com/nschoenwald/niks-animation-dedupe/releases/latest/download/module.json
 ```
 
-## What gets skipped
+## Boss Loot FX first (default)
 
 Automated Animations is skipped when Boss Loot FX will play:
 
@@ -30,21 +30,43 @@ Automated Animations is skipped when Boss Loot FX will play:
 Boss Loot FX's own switches are respected: if its automatic animations or condition animations are turned off, or
 automatic animations are turned off for an activity, Automated Animations plays as usual.
 
-The module asks Boss Loot FX directly instead of keeping its own list, so new BLFX animations and changes to your
-Custom Auto-Rec list are picked up without an update. If a Boss Loot FX update ever changes how it works inside, this
-module stops interfering and Automated Animations plays as usual.
+## Automated Animations first
+
+Boss Loot FX is skipped when Automated Animations will play:
+
+- an animation set on the item or activity in its Automated Animations menu,
+- an animation from the Automated Animations Global Menu that matches the activity or item name, the same way
+  Automated Animations finds it (including exact matches and excluded terms),
+- an Automated Animations effect animation for the effect or condition, matched by its name.
+
+Automated Animations' own switches are respected: animations turned off on an item or activity, the Global Menu or
+effect animations turned off in its settings, or all animations turned off. Its *play on damage* setting decides
+whether it animates the attack or the damage roll.
+
+Boss Loot FX animations that Automated Animations never plays, such as on saving throws or when damage is taken,
+always play.
+
+## How it works
+
+The module reads both modules' own animation lists and settings while you play, so new animations and changes to
+your menus are picked up without an update. If an update of either module ever changes how it works inside, this
+module stops interfering and both play as usual.
 
 ## Settings
 
-- **Skip Automated Animations when BLFX animates**: turns the module on and off.
+- **Prevent double animations**: turns the module on and off.
+- **Priority**: which module plays when both would animate the same thing: *Boss Loot FX* (default) or
+  *Automated Animations*.
 - **What counts as a duplicate**:
-  - *Same activity* (default): Automated Animations is skipped if Boss Loot FX animates the activity at any moment:
-    attack, damage, use, template or summon. This also covers Automated Animations playing on the damage roll while
-    Boss Loot FX plays on the attack roll.
-  - *Same moment only*: Automated Animations is skipped only if Boss Loot FX animates that exact moment.
+  - *Same activity* (default): the other module is skipped if the module with priority animates the activity at any
+    moment: attack, damage, use, template or summon. This also covers one module playing on the attack roll and the
+    other on the damage roll. An effect counts as part of the activity that applies it: Boss Loot FX animates *Witch
+    Bolt* through its lingering *Sustained Lightning* effect, so Automated Animations' Witch Bolt animation on the
+    attack is skipped too.
+  - *Same moment only*: the other module is skipped only if both would animate that exact moment, and effects are
+    only compared with effects.
 
-  Effects are always compared with Boss Loot FX effect animations only. A spell that BLFX animates when it's cast but
-  not while its effect lasts, such as *Armor of Agathys*, keeps its Automated Animations effect animation.
+  Conditions such as Poisoned are always compared with each other only.
 - **Debug logging**: writes every skipped and allowed animation to the browser console.
 
 ## Modules by Nik
@@ -55,7 +77,7 @@ module stops interfering and Automated Animations plays as usual.
 ### 🎲 D&D 5e Specific
 * **[Nik's DnD5e Tweaks](https://github.com/nschoenwald/niks-dnd5e-tweaks)** – Consolidated collection of quality-of-life enhancements and combat automation tweaks for DnD5e.
 * **[Nik's Give & Take](https://github.com/nschoenwald/niks-give-and-take)** – Players hand items and money to other characters and the party, and take them from the party's stash.
-* **[Nik's Animation Dedupe](https://github.com/nschoenwald/niks-animation-dedupe)** – Stops Automated Animations from playing when Boss Loot FX animates the same item, effect or condition.
+* **[Nik's Animation Dedupe](https://github.com/nschoenwald/niks-animation-dedupe)** – Automated Animations and Boss Loot FX never both animate the same thing; you choose which one has priority.
 
 ### ⚔️ Combat & Token Tools
 * **[Nik's Action HUD](https://github.com/nschoenwald/niks-action-hud)** – Sleek, modern canvas-docked Action HUD for quick access to attacks, spells, inventory, and utility rolls.

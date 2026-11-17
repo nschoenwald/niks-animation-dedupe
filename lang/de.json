@@ -2,18 +2,24 @@
   "NAD": {
     "Settings": {
       "Enabled": {
-        "Name": "Automated Animations überspringen, wenn BLFX animiert",
-        "Hint": "Wenn Boss Loot FX ein Item, einen Effekt oder einen Zustand animiert, spielt Automated Animations dafür keine eigene Animation ab."
+        "Name": "Doppelte Animationen verhindern",
+        "Hint": "Wenn Automated Animations und Boss Loot FX beide ein Item, einen Effekt oder einen Zustand animieren würden, spielt nur das unter Priorität gewählte Modul seine Animation ab."
+      },
+      "Priority": {
+        "Name": "Priorität",
+        "Hint": "Welches Modul abspielt, wenn beide dasselbe animieren würden. Das andere animiert weiterhin alles, was das gewählte Modul nicht animiert.",
+        "Blfx": "Boss Loot FX",
+        "AA": "Automated Animations"
       },
       "MatchMode": {
         "Name": "Was als doppelt gilt",
-        "Hint": "Gleiche Aktivität: Automated Animations wird übersprungen, wenn BLFX die Aktivität zu irgendeinem Zeitpunkt animiert (Angriff, Schaden, Einsatz, Schablone, Beschwörung). Nur gleicher Zeitpunkt: Es wird nur übersprungen, wenn BLFX genau diesen Zeitpunkt animiert, sodass eine Schadensanimation von Automated Animations weiterhin abgespielt wird, wenn BLFX nur den Angriff animiert. Effekte werden immer mit den Effektanimationen von BLFX verglichen.",
+        "Hint": "Gleiche Aktivität: Das andere Modul wird übersprungen, wenn das Modul mit Priorität die Aktivität zu irgendeinem Zeitpunkt animiert (Angriff, Schaden, Einsatz, Schablone, Beschwörung). In diesem Modus gehört ein Effekt zu der Aktivität, die ihn anwendet (zum Beispiel der anhaltende Blitz von Hexenblitz). Nur gleicher Zeitpunkt: Das andere Modul wird nur übersprungen, wenn beide genau denselben Zeitpunkt animieren würden, sodass die Schadensanimation des anderen Moduls weiterhin abgespielt wird, wenn das Modul mit Priorität nur den Angriff animiert, und Effekte werden nur mit Effekten verglichen. Zustände werden immer nur miteinander verglichen.",
         "Activity": "Gleiche Aktivität (empfohlen)",
         "Trigger": "Nur gleicher Zeitpunkt"
       },
       "Debug": {
         "Name": "Debug-Ausgabe",
-        "Hint": "Jede übersprungene und erlaubte Animation von Automated Animations in der Browser-Konsole ausgeben."
+        "Hint": "Jede übersprungene und erlaubte Animation in der Browser-Konsole ausgeben."
       }
     }
   }

@@ -70,7 +70,12 @@ globalThis.foundry = new Proxy(
 class Item { constructor(d) { Object.assign(this, d); this.flags ??= {}; } get isEmbedded() { return !!this.parent; } }
 class Actor { constructor(d) { Object.assign(this, d); } }
 class ActiveEffect { constructor(d) { Object.assign(this, d); } }
-Object.assign(globalThis, { Item, Actor, ActiveEffect, CONFIG: { Item: { documentClass: Item } } });
+Object.assign(globalThis, { Item, Actor, ActiveEffect, CONFIG: { Item: { documentClass: Item }, DND5E: { areaTargetTypes: { cone: {}, cube: {}, cylinder: {}, line: {}, radius: {}, sphere: {}, square: {}, wall: {} } } } });
+
+// A-A's global menus: the real Global Menu export, as AutomatedAnimations.AutorecManager returns them.
+const AA_MENU = process.env.AA_MENU ?? path.join(os.homedir(), 'Downloads/fvtt-AutomatedAnimations-GlobalMenu-dnd5e-full.json');
+const aaMenus = JSON.parse(fs.readFileSync(AA_MENU, 'utf8'));
+globalThis.AutomatedAnimations = { AutorecManager: { getAutorecEntries: () => structuredClone(aaMenus) } };
 for (const name of ['Application', 'FormApplication', 'Dialog', 'Sequence', 'Sequencer', 'canvas', 'ui', 'Token', 'TokenDocument', 'ChatMessage', 'Roll', 'Macro', 'socketlib', 'TextEditor', 'Handlebars', 'loadTemplates'])
   globalThis[name] ??= stub();
 
@@ -78,6 +83,11 @@ const settings = new Map(Object.entries({
   'boss-loot-assets-premium.blfxAutoRecognition': true,
   'boss-loot-assets-premium.blfxConditionAnimation': true,
   'boss-loot-assets-premium.blfxCustomAutoRecognition': {},
+  'autoanimations.killAllAnim': 'on',
+  'autoanimations.playonDamageCore': false,
+  'autoanimations.disableAutoRec': false,
+  'autoanimations.disableAEAnimations': false,
+  'niks-animation-dedupe.priority': 'blfx',
   'niks-animation-dedupe.enabled': true,
   'niks-animation-dedupe.matchMode': 'activity',
   'niks-animation-dedupe.debug': false,
@@ -105,6 +115,10 @@ globalThis.document = {
 /* ---------------- load everything ---------------- */
 
 await import(BLFX_ENTRY); // BLFX itself, as Foundry would
+// Replace BLFX's entry points with spies (same module instance this module wraps later).
+const { BlfxMacroExecutor: X } = await import(new URL('./apps/BlfxMacroExecutor.js', BLFX_ENTRY).href);
+const blfxCalls = [];
+for (const name of ['callMacro', 'callAoeMacro', 'callConditionMacro']) X[name] = async args => { blfxCalls.push({ name, args }); };
 const { default: AAHandler } = await import(pathToFileURL(path.join(AA_DIR, 'src/system-handlers/workflow-data.js')).href);
 await import('../scripts/main.js');
 Hooks.callAll('init');
@@ -122,7 +136,13 @@ const rifle = item({ name: 'Antimatter Rifle', type: 'weapon', system: { type: {
 const fireball = item({ name: 'Fireball', type: 'spell', system: { identifier: 'fireball' } });
 const meteor = item({ name: 'Meteor Swarm', type: 'spell', system: { identifier: 'meteor-swarm' } });
 const bless = item({ name: 'Bless', type: 'spell', system: { identifier: 'bless', activities: { contents: [activity('utility', { effects: [{ effect: { name: 'Bless' } }] })] } } });
-const agathys = item({ name: 'Armor of Agathys', type: 'spell', system: { identifier: 'armor-of-agathys' } });
+// PHB Armor of Agathys: 'Cast' is a heal activity (temp HP); the effect stands for one added by the GM or another module.
+const agathysCast = activity('heal', { name: 'Cast', effects: [{ effect: { name: 'Armor of Agathys' } }] });
+const agathys = item({ name: 'Armor of Agathys', type: 'spell', system: { identifier: 'armor-of-agathys', activities: { contents: [agathysCast] } } });
+// PHB Witch Bolt: attack activity applying "Sustained Lightning", plus a "Bonus Action Damage" activity of type damage.
+const wbAttack = activity('attack', { id: 'wb-attack', name: '', damage: { parts: [{}] }, effects: [{ effect: { name: 'Sustained Lightning' } }] });
+const wbDamage = activity('damage', { id: 'wb-damage', name: 'Bonus Action Damage', damage: { parts: [{}] } });
+const witchBolt = item({ name: 'Witch Bolt', type: 'spell', system: { identifier: 'witch-bolt', activities: { contents: [wbAttack, wbDamage] } } });
 const tornado = item({ name: 'Fire Tornado', type: 'feat', system: { identifier: 'blfx-fire-tornado' } });
 const unowned = item({ name: 'Longsword', type: 'weapon', system: { type: { baseItem: 'longsword' } } }, false);
 const arOff = item({
@@ -133,7 +153,7 @@ const customDamageOnly = item({
   name: 'Homebrew Blade', type: 'weapon', system: { type: { baseItem: 'longsword' } },
   flags: { 'boss-loot-assets-premium': { 'act-attack': { command: 'console.log(1)', eventType: 'After Damage Roll' } } },
 });
-uuids.set('Item.bless', bless).set('Item.agathys', agathys);
+uuids.set('Item.bless', bless).set('Item.agathys', agathys).set('Item.witchBolt', witchBolt);
 const effect = d => new ActiveEffect({ ...d, statuses: Object.assign(new Set(d.statuses ?? []), { first() { return [...this][0]; } }) });
 
 /* ---------------- run through the real A-A workflow ---------------- */
@@ -172,7 +192,10 @@ const cases = [
   ['BLFX auto-rec turned off on the activity', attack(arOff), true],
   ['Custom BLFX animation on damage, A-A attack, mode=activity', attack(customDamageOnly), false],
   ['Bless effect from Bless spell', ae(effect({ name: 'Bless', origin: 'Item.bless', _source: { origin: 'Item.bless' } })), false],
-  ['Armor of Agathys effect (BLFX animates cast, not effect)', ae(effect({ name: 'Armor of Agathys', _source: { origin: 'Item.agathys' } })), true],
+  ['Armor of Agathys effect, mode=activity (BLFX animates the cast)', ae(effect({ name: 'Armor of Agathys', _source: { origin: 'Item.agathys' } })), false],
+  ['Witch Bolt attack (BLFX animates it through its effect)', attack(witchBolt, wbAttack), false],
+  ['Witch Bolt damage roll of the attack', damage(witchBolt, wbAttack), false],
+  ['Witch Bolt Bonus Action Damage', damage(witchBolt, wbDamage), false],
   ['Poisoned condition', ae(effect({ name: 'Poisoned', statuses: ['poisoned'], parent: actor })), false],
   ['Prone condition (no BLFX condition animation)', ae(effect({ name: 'Prone', statuses: ['prone'], parent: actor })), true],
   ['A-A has no animation for it', attack(longsword), true, null],
@@ -182,6 +205,8 @@ const settingCases = [
   ['mode=trigger: custom BLFX animation on damage, A-A attack', () => settings.set('niks-animation-dedupe.matchMode', 'trigger'), attack(customDamageOnly), true],
   ['mode=trigger: same item, A-A damage', null, damage(customDamageOnly), false],
   ['mode=trigger: Longsword +1 damage (BLFX animates attack only)', null, damage(longsword), true],
+  ['mode=trigger: Witch Bolt attack (effect is another moment)', null, attack(witchBolt, wbAttack), true],
+  ['mode=trigger: Armor of Agathys effect (BLFX animates cast only)', null, ae(effect({ name: 'Armor of Agathys', _source: { origin: 'Item.agathys' } })), true],
   ['BLFX auto-recognition setting off: Longsword', () => { settings.set('niks-animation-dedupe.matchMode', 'activity'); settings.set('boss-loot-assets-premium.blfxAutoRecognition', false); }, attack(longsword), true],
   ['BLFX auto-recognition setting off: blfx- custom item still plays', null, template(tornado, activity('utility')), false],
   ['BLFX condition animations off: Poisoned', () => settings.set('boss-loot-assets-premium.blfxConditionAnimation', false), ae(effect({ name: 'Poisoned', statuses: ['poisoned'] })), true],
@@ -200,6 +225,48 @@ if (blfxInitCount !== 1 || !game.modules.get('niks-animation-dedupe').api) fail+
 
 for (const [name, data, want, anim] of cases) report(name, await aaPlays(data, anim === null ? null : AA_HAS_ANIMATION), want);
 for (const [name, setup, data, want] of settingCases) { setup?.(); report(name, await aaPlays(data), want); }
+
+/* ---------------- Automated Animations first ---------------- */
+
+async function blfxPlays(name, args) {
+  blfxCalls.length = 0;
+  await X[name](args);
+  return blfxCalls.length === 1;
+}
+const atk = (extra = {}) => activity('attack', { name: 'Attack', damage: { parts: [{}] }, ...extra });
+const qwxyz = item({ name: 'Qwxyz', type: 'weapon', system: { type: { baseItem: 'longsword' } } });
+const aaOffItem = item({ name: 'Longsword +1', type: 'weapon', system: { type: { baseItem: 'longsword' } }, flags: { autoanimations: { version: 5, isEnabled: false } } });
+const fireballSave = activity('save', { name: 'Cast', target: { template: { type: 'sphere' } }, damage: { parts: [{}] } });
+
+const aaFirstCases = [
+  ['A-A first: Longsword +1 attack (A-A "Sword")', () => { settings.set('niks-animation-dedupe.enabled', true); settings.set('niks-animation-dedupe.priority', 'aa'); }, 'callMacro', { item: longsword, activity: atk(), trigger: 'afterAttack' }, false],
+  ['A-A first: Longsword +1 damage, mode=activity', null, 'callMacro', { item: longsword, activity: atk(), trigger: 'afterDamage' }, false],
+  ['A-A first: weapon A-A has nothing for', null, 'callMacro', { item: qwxyz, activity: atk(), trigger: 'afterAttack' }, true],
+  ['A-A first: A-A turned off on the item', null, 'callMacro', { item: aaOffItem, activity: atk(), trigger: 'afterAttack' }, true],
+  ['A-A first: Fireball template (A-A preset "Fireball")', null, 'callAoeMacro', { item: fireball, activity: fireballSave, trigger: 'createTemplate' }, false],
+  ['A-A first: Witch Bolt effect beam (A-A animates the attack)', null, 'callMacro', { item: witchBolt, activity: wbAttack, effect: effect({ name: 'Sustained Lightning' }), trigger: 'afterActiveEffects' }, false],
+  ['A-A first: Bless effect (A-A effect "Bless")', null, 'callMacro', { item: bless, effect: effect({ name: 'Bless' }), trigger: 'afterActiveEffects' }, false],
+  ['A-A first: Poisoned condition (A-A effect "Poisoned")', null, 'callConditionMacro', { effect: effect({ name: 'Poisoned', statuses: ['poisoned'] }) }, false],
+  ['A-A first: Deafened condition (not in A-A effects)', null, 'callConditionMacro', { effect: effect({ name: 'Deafened', statuses: ['deafened'] }) }, true],
+  ['A-A first: saving throw (A-A never animates)', null, 'callMacro', { item: longsword, activity: atk(), trigger: 'afterRollSavingThrow' }, true],
+  ['A-A first, mode=trigger: Longsword +1 damage (A-A plays on attack)', () => settings.set('niks-animation-dedupe.matchMode', 'trigger'), 'callMacro', { item: longsword, activity: atk(), trigger: 'afterDamage' }, true],
+  ['A-A first, mode=trigger: Witch Bolt effect beam (effect not in A-A effects)', null, 'callMacro', { item: witchBolt, activity: wbAttack, effect: effect({ name: 'Sustained Lightning' }), trigger: 'afterActiveEffects' }, true],
+  ['A-A first, mode=trigger: Longsword +1 attack', null, 'callMacro', { item: longsword, activity: atk(), trigger: 'afterAttack' }, false],
+  ['A-A first, mode=trigger, A-A plays on damage: Longsword +1 damage', () => settings.set('autoanimations.playonDamageCore', true), 'callMacro', { item: longsword, activity: atk(), trigger: 'afterDamage' }, false],
+  ['A-A first: all A-A animations off', () => { settings.set('autoanimations.playonDamageCore', false); settings.set('niks-animation-dedupe.matchMode', 'activity'); settings.set('autoanimations.killAllAnim', 'off'); }, 'callMacro', { item: longsword, activity: atk(), trigger: 'afterAttack' }, true],
+  ['BLFX first: wrapper lets BLFX through', () => { settings.set('autoanimations.killAllAnim', 'on'); settings.set('niks-animation-dedupe.priority', 'blfx'); }, 'callMacro', { item: longsword, activity: atk(), trigger: 'afterAttack' }, true],
+];
+
+for (const [name, setup, entry, args, want] of aaFirstCases) {
+  setup?.();
+  const got = await blfxPlays(entry, args);
+  const ok = got === want;
+  if (!ok) fail++;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}: BLFX ${got ? 'plays' : 'skipped'}${ok ? '' : ` (expected ${want ? 'plays' : 'skipped'})`}`);
+}
+
+settings.set('niks-animation-dedupe.priority', 'aa');
+report('A-A first: A-A is not skipped for Longsword +1', await aaPlays(attack(longsword)), true);
 
 console.log(`\n${fail ? `${fail} FAILED` : 'All passed'}`);
 process.exit(fail ? 1 : 0);

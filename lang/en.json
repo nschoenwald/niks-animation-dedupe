@@ -2,18 +2,24 @@
   "NAD": {
     "Settings": {
       "Enabled": {
-        "Name": "Skip Automated Animations when BLFX animates",
-        "Hint": "When Boss Loot FX is going to animate an item, effect or condition, Automated Animations doesn't play its own animation for it."
+        "Name": "Prevent double animations",
+        "Hint": "When Automated Animations and Boss Loot FX would both animate an item, effect or condition, only the one chosen under Priority plays."
+      },
+      "Priority": {
+        "Name": "Priority",
+        "Hint": "Which module plays when both would animate the same thing. The other one still animates everything the chosen module doesn't.",
+        "Blfx": "Boss Loot FX",
+        "AA": "Automated Animations"
       },
       "MatchMode": {
         "Name": "What counts as a duplicate",
-        "Hint": "Same activity: Automated Animations is skipped if BLFX animates the activity at any moment (attack, damage, use, template, summon). Same moment only: it is skipped only if BLFX animates that exact moment, so an Automated Animations damage animation still plays when BLFX only animates the attack. Effects are always compared with BLFX effect animations.",
+        "Hint": "Same activity: the other module is skipped if the module with priority animates the activity at any moment (attack, damage, use, template, summon). In this mode an effect counts as part of the activity that applies it (for example Witch Bolt's lingering lightning). Same moment only: the other module is skipped only if both would animate the exact same moment, so the other module's damage animation still plays when the module with priority only animates the attack, and effects are only compared with effects. Conditions are always compared with each other only.",
         "Activity": "Same activity (recommended)",
         "Trigger": "Same moment only"
       },
       "Debug": {
         "Name": "Debug logging",
-        "Hint": "Write every skipped and allowed Automated Animations animation to the browser console."
+        "Hint": "Write every skipped and allowed animation to the browser console."
       }
     }
   }

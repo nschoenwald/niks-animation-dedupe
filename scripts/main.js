@@ -1,12 +1,16 @@
 /**
  * Nik's Animation Dedupe
  *
- * Listens to Automated Animations' "AutomatedAnimations-WorkflowStart" hook and vetoes the
- * A-A workflow (clonedData.stopWorkflow = true) whenever Boss Loot FX will play its own
- * animation for the same item / activity / active effect.
+ * Makes sure Automated Animations (A-A) and Boss Loot FX (BLFX) never both animate the same thing.
+ * The "priority" setting decides which one plays:
  *
- * Instead of copying BLFX's lookup tables, it asks BLFX's own BlfxMacroExecutor class, loaded
- * from the exact URL BLFX already loaded, so the browser hands back the same module instance.
+ * - BLFX first: A-A's "AutomatedAnimations-WorkflowStart" hook is vetoed (clonedData.stopWorkflow)
+ *   whenever BLFX will play its own animation. BLFX is asked through its own BlfxMacroExecutor class,
+ *   loaded from the exact URL BLFX already loaded, so the browser hands back the same module instance.
+ * - A-A first: BlfxMacroExecutor's entry points (callMacro, callAoeMacro, callConditionMacro) are
+ *   wrapped and return early whenever A-A will play. A-A has no lookup API, so its lookup
+ *   (findAnimation.js handleItem + autorec/search.js) and its dnd5e hook rules are mirrored, reading
+ *   A-A's live menus through AutomatedAnimations.AutorecManager.getAutorecEntries().
  */
 
 const ID = 'niks-animation-dedupe';
@@ -41,6 +45,15 @@ Hooks.once('init', () => {
     type: Boolean,
     default: true,
   });
+  game.settings.register(ID, 'priority', {
+    name: 'NAD.Settings.Priority.Name',
+    hint: 'NAD.Settings.Priority.Hint',
+    scope: 'world',
+    config: true,
+    type: String,
+    choices: { blfx: 'NAD.Settings.Priority.Blfx', aa: 'NAD.Settings.Priority.AA' },
+    default: 'blfx',
+  });
   game.settings.register(ID, 'matchMode', {
     name: 'NAD.Settings.MatchMode.Name',
     hint: 'NAD.Settings.MatchMode.Hint',
@@ -67,9 +80,12 @@ Hooks.once('ready', async () => {
   if (!blfx) return;
 
   Hooks.on('AutomatedAnimations-WorkflowStart', onWorkflowStart);
-  game.modules.get(ID).api = { blfxWillAnimate, blfxWillAnimateEffect };
-  console.log(`${ID} | Ready: Automated Animations will be skipped where BLFX animates.`);
+  wrapBlfx(blfx.BlfxMacroExecutor);
+  game.modules.get(ID).api = { blfxWillAnimate, blfxWillAnimateEffect, aaWillAnimate, aaWillAnimateEffect };
+  console.log(`${ID} | Ready.`);
 });
+
+const blfxFirst = () => game.settings.get(ID, 'priority') !== 'aa';
 
 /**
  * Import BLFX's executor from the URL BLFX's own module graph used.
@@ -116,7 +132,7 @@ async function loadBlfx() {
 
 function onWorkflowStart(data, animationData) {
   if (!animationData) return; // A-A has nothing to play anyway
-  if (!game.settings.get(ID, 'enabled')) return;
+  if (!game.settings.get(ID, 'enabled') || !blfxFirst()) return;
 
   // A-A awaits these before checking stopWorkflow, which lets the check be async.
   (data.deferrals ??= []).push(
@@ -145,11 +161,15 @@ async function decide(data) {
     else if (activity?.type === 'summon') triggers = ['afterSummon'];
     else triggers = ITEM_TRIGGERS;
   } else {
-    triggers = ITEM_TRIGGERS;
+    // An effect the activity applies counts as part of the activity (e.g. Witch Bolt: BLFX animates
+    // the bolt through its "Sustained Lightning" effect, not on the attack roll).
+    triggers = activity?.effects?.length ? [...ITEM_TRIGGERS, 'afterActiveEffects'] : ITEM_TRIGGERS;
   }
 
   return blfxWillAnimate(item, activity, triggers, roll);
 }
+
+const sameActivityMode = () => game.settings.get(ID, 'matchMode') !== 'trigger';
 
 /* -------------------------------------------- */
 /*  BLFX prediction                             */
@@ -188,8 +208,11 @@ export async function blfxWillAnimate(item, activity, triggers, roll) {
   return false;
 }
 
-/** Would BLFX play something when this active effect is created? (BLFX hooks.js _afterActiveEffect) */
-export async function blfxWillAnimateEffect(effect) {
+/**
+ * Would BLFX play something for this active effect? (BLFX hooks.js _afterActiveEffect)
+ * In "same activity" mode, BLFX animating the effect's activity at any moment counts too.
+ */
+export async function blfxWillAnimateEffect(effect, { withActivity = sameActivityMode() } = {}) {
   if (!effect) return false;
   const item = await originItem(effect);
 
@@ -202,7 +225,7 @@ export async function blfxWillAnimateEffect(effect) {
   }
 
   const activity = await originActivity(item, effect);
-  return blfxWillAnimate(item, activity, ['afterActiveEffects']);
+  return blfxWillAnimate(item, activity, withActivity ? ['afterActiveEffects', ...ITEM_TRIGGERS] : ['afterActiveEffects']);
 }
 
 // Same resolution order as BLFX hooks.js getItem()
@@ -242,4 +265,178 @@ async function originActivity(item, effect) {
 function slugify(input) {
   if (!input) return '';
   return input.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim().split(/\s+/).join('-');
+}
+
+/* -------------------------------------------- */
+/*  A-A first: wrap BLFX                        */
+/* -------------------------------------------- */
+
+// BLFX trigger → the A-A moment that would collide with it.
+const MOMENT_OF_TRIGGER = {
+  afterAttack: 'attack', afterThrown: 'attack', afterDamage: 'damage',
+  afterItemUse: 'use', postUseActivity: 'use',
+  createTemplate: 'template', destroyTemplate: 'template', afterSummon: 'summon',
+};
+
+/**
+ * Wrap BLFX's three entry points. hooks.js calls them as BlfxMacroExecutor.callMacro(...), so
+ * replacing the static methods on the shared class reaches every BLFX trigger.
+ */
+function wrapBlfx(X) {
+  for (const name of ['callMacro', 'callAoeMacro', 'callConditionMacro']) {
+    const original = X[name];
+    if (typeof original !== 'function') {
+      console.warn(`${ID} | BLFX ${name} not found; "Automated Animations first" can't skip it.`);
+      continue;
+    }
+    X[name] = async function (args = {}) {
+      if (game.settings.get(ID, 'enabled') && !blfxFirst()) {
+        try {
+          if (aaWillAnimateForBlfx(name, args)) {
+            log('Skipping BLFX (A-A animates this):', args.item?.name ?? args.effect?.name, args.trigger ?? name, args);
+            return;
+          }
+        } catch (err) {
+          console.warn(`${ID} | Check failed, letting BLFX play.`, err);
+        }
+      }
+      return original.call(this, args);
+    };
+  }
+}
+
+function aaWillAnimateForBlfx(entryPoint, { item, activity, effect, trigger }) {
+  if (entryPoint === 'callConditionMacro') return aaWillAnimateEffect(effect);
+  // In "same activity" mode an effect counts as part of the activity that applies it, both ways.
+  if (trigger === 'afterActiveEffects' || trigger === 'deleteActiveEffects') {
+    return aaWillAnimateEffect(effect) || (sameActivityMode() && aaMoments(item, activity).size > 0);
+  }
+
+  const moment = MOMENT_OF_TRIGGER[trigger];
+  if (!moment) return false; // saving throws, skills, formulas, combat, damage taken: A-A doesn't animate these
+  const moments = aaMoments(item, activity);
+  if (!sameActivityMode()) return moments.has(moment);
+  return moments.size > 0 || (activity?.effects ?? []).some(e => e.effect && aaWillAnimateEffect(e.effect));
+}
+
+/* -------------------------------------------- */
+/*  A-A prediction                              */
+/* -------------------------------------------- */
+
+const aaSetting = key => {
+  try { return game.settings.get(AA, key); } catch { return undefined; }
+};
+const aaOff = () => aaSetting('killAllAnim') === 'off';
+
+/** Would A-A play something for this activity at any moment? */
+export function aaWillAnimate(item, activity) {
+  return aaMoments(item, activity).size > 0;
+}
+
+/**
+ * The moments (attack, damage, use, template, summon) at which A-A animates this activity.
+ * Mirrors the dnd5e hooks in A-A src/system-support/aa-dnd5e.js and the extra menu checks in its
+ * useItem() / summon() handlers.
+ */
+function aaMoments(item, activity) {
+  const moments = new Set();
+  if (!(item instanceof Item) || !activity || aaOff()) return moments;
+  if (activity.description?.chatFlavor?.includes('[noaa]')) return moments;
+
+  const areaTypes = Object.keys(CONFIG.DND5E?.areaTargetTypes ?? {});
+  if (areaTypes.includes(activity.target?.template?.type)) {
+    if (aaLookup(item, activity, { isTemplate: true })) moments.add('template');
+    return moments;
+  }
+
+  const anim = aaLookup(item, activity);
+  if (!anim) return moments;
+  const playOnDamage = !!aaSetting('playonDamageCore');
+  const hasDamage = !!activity.damage?.parts?.length;
+  const type = activity.type;
+
+  if (type === 'attack' && !(hasDamage && playOnDamage)) moments.add('attack');
+  if ((hasDamage || type === 'heal') && (type !== 'attack' || playOnDamage)) moments.add('damage');
+  if (!hasDamage && type !== 'heal' && !(type === 'summon' && anim.menu === 'range')) moments.add('use');
+  if (type === 'summon' && anim.menu === 'range') moments.add('summon');
+  return moments;
+}
+
+/** Would A-A play an effect animation for this active effect? (A-A active-effects/handleActiveEffects.js) */
+export function aaWillAnimateEffect(effect) {
+  if (!effect || effect.disabled || aaOff() || aaSetting('disableAEAnimations')) return false;
+  // On creation A-A copies the flags of the item the effect sits on onto the effect.
+  const flags = effect.parent instanceof Item && effect.parent.flags?.[AA] ? aaFlags(effect.parent) : aaFlags(effect);
+  return !!aaLookup(effect, null, { activeEffect: true, flags });
+}
+
+/** Mirrors A-A src/system-handlers/findAnimation.js handleItem() (without ammo and PF2e variants). */
+function aaLookup(doc, activity, { isTemplate = false, activeEffect = false, flags } = {}) {
+  const name = doc.name ?? doc.label;
+  const rinsedName = name ? rinse(name) : 'noitem';
+  const docFlags = (flags !== undefined ? flags : aaFlags(doc)) ?? {};
+  const activityFlags = activity ? aaFlags(activity) ?? {} : null;
+  const autorecDisabled = !!aaSetting('disableAutoRec');
+
+  const entries = { ...(globalThis.AutomatedAnimations?.AutorecManager?.getAutorecEntries?.() ?? {}) };
+  delete entries.version;
+  if (!activeEffect) entries.aefx = [];
+  const menus = sortAndFilterMenus(entries);
+
+  if (activityFlags && (activityFlags.killAnim || activityFlags.isEnabled === false)) return false;
+  if (docFlags.killAnim || docFlags.isEnabled === false) return false;
+
+  if (activeEffect) {
+    if (docFlags.isCustomized) return docFlags;
+    return autorecDisabled ? false : singleMenuSearch(entries.aefx ?? [], rinsedName, name);
+  }
+
+  if (activityFlags?.isCustomized) return activityFlags;
+  if (docFlags.isCustomized) return docFlags;
+  if (autorecDisabled) return false;
+
+  const overrideNames = activity?.name && !['heal', 'summon'].includes(activity.name.trim()) ? [activity.name] : [];
+  let found = false;
+  for (const n of [...overrideNames, name]) {
+    found = allMenuSearch(menus, rinse(n), n);
+    if (found) break;
+  }
+  if (found && isTemplate && ['range', 'melee', 'ontoken'].includes(found.menu)) {
+    found = singleMenuSearch(entries.templatefx ?? [], rinsedName, name);
+  }
+  return found;
+}
+
+// Mirrors A-A src/autorec/flags.js getFlags() (SCHEMA_VERSION 5 in src/data/entries.js)
+const AA_SCHEMA_VERSION = 5;
+function aaFlags(doc) {
+  if (!doc) return undefined;
+  const source = { document: doc, path: 'flags', key: doc.uuid ?? doc.id };
+  Hooks.callAll('aa.flagSource', doc, source);
+  const flags = foundry.utils.getProperty(source.document, source.path)?.[AA] ?? doc.flags?.[AA];
+  if (!flags || !(Number(flags.version) >= AA_SCHEMA_VERSION)) return undefined;
+  return flags;
+}
+
+// Mirrors A-A src/autorec/search.js AAAutorecFunctions
+const rinse = name => name?.replace(/\s+/g, '').toLowerCase();
+function sortAndFilterMenus(menus) {
+  const entries = Object.values(menus).flat().filter(e => e?.label);
+  entries.sort((a, b) => rinse(b.label).length - rinse(a.label).length);
+  return {
+    exactMatchMenus: entries.filter(x => x.advanced?.exactMatch),
+    bestMatchMenus: entries.filter(x => !x.advanced?.exactMatch),
+  };
+}
+function allMenuSearch(menus, rinsedName, trueName) {
+  if (!rinsedName) return false;
+  return menus.exactMatchMenus.find(x => x.label === trueName)
+    || menus.bestMatchMenus.find(x => rinsedName.includes(rinse(x.label))
+      && !x.advanced?.excludedTerms?.some(term => term && rinsedName.includes(rinse(term))))
+    || false;
+}
+function singleMenuSearch(menu, rinsedName, trueName) {
+  if (!rinsedName) return false;
+  const entries = Array.isArray(menu) ? menu : Object.values(menu).flat();
+  return allMenuSearch(sortAndFilterMenus({ menu: entries }), rinsedName, trueName);
 }
