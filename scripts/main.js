@@ -26,7 +26,7 @@ const BLFX_CONDITIONS = new Set([
   'restrained', 'paralyzed', 'petrified', 'poisoned', 'silenced', 'stunned', 'unconscious',
 ]);
 
-let blfx = null; // { BlfxMacroExecutor, TRIGGER_MAP }
+let blfx = null; // { BlfxMacroExecutor, TRIGGER_MAP, helpers }
 
 const log = (...args) => {
   if (game.settings.get(ID, 'debug')) console.log(`${ID} |`, ...args);
@@ -81,6 +81,7 @@ Hooks.once('ready', async () => {
 
   Hooks.on('AutomatedAnimations-WorkflowStart', onWorkflowStart);
   wrapBlfx(blfx.BlfxMacroExecutor);
+  fixLineLength(blfx.helpers);
   game.modules.get(ID).api = { blfxWillAnimate, blfxWillAnimateEffect, aaWillAnimate, aaWillAnimateEffect };
   console.log(`${ID} | Ready.`);
 });
@@ -119,7 +120,9 @@ async function loadBlfx() {
     if (typeof executor.BlfxMacroExecutor?.getAutoRecognitionAnimation !== 'function' || !constants.TRIGGER_MAP) {
       throw new Error('BLFX internals have changed (BlfxMacroExecutor / TRIGGER_MAP not found)');
     }
-    return { BlfxMacroExecutor: executor.BlfxMacroExecutor, TRIGGER_MAP: constants.TRIGGER_MAP };
+    // Only needed for fixLineLength; a failure here mustn't turn off the dedupe.
+    const helpers = await import(new URL('../helperFunctions.js', url).href).then(m => m.helperData, () => null);
+    return { BlfxMacroExecutor: executor.BlfxMacroExecutor, TRIGGER_MAP: constants.TRIGGER_MAP, helpers };
   } catch (err) {
     console.warn(`${ID} | Could not read BLFX's animation logic; doing nothing, so Automated Animations is unaffected.`, err);
     return null;
@@ -303,6 +306,51 @@ function wrapBlfx(X) {
       return original.call(this, args);
     };
   }
+}
+
+/* -------------------------------------------- */
+/*  BLFX line length fix                        */
+/* -------------------------------------------- */
+
+/**
+ * Workaround for a BLFX bug (3.6.1): helperData.getAnimationForRayTemplate swaps "width-XXft" in a
+ * line animation for the template's length (10/20/30/60/90) without checking the file exists, e.g.
+ * acid breath only has width-30ft, so a 60 ft line asks for a missing asset and nothing plays.
+ * If BLFX's pick doesn't exist, use the closest length that does (the line macro stretches the
+ * animation to the template anyway), else BLFX's original name. Does nothing once BLFX checks itself.
+ */
+function fixLineLength(helpers) {
+  const original = helpers?.getAnimationForRayTemplate;
+  if (typeof original !== 'function') {
+    console.warn(`${ID} | BLFX getAnimationForRayTemplate not found; line length fix not applied.`);
+    return;
+  }
+  helpers.getAnimationForRayTemplate = function (animation, templateDocument) {
+    const picked = original.call(this, animation, templateDocument);
+    try {
+      if (typeof picked !== 'string' || picked === animation || hasAsset(picked)) return picked;
+      const fallback = closestLength(picked) ?? animation;
+      log('BLFX line animation not found, using', fallback, 'instead of', picked);
+      return fallback;
+    } catch (err) {
+      console.warn(`${ID} | Line length check failed, keeping BLFX's pick.`, err);
+      return picked;
+    }
+  };
+}
+
+const LINE_LENGTHS = [10, 20, 30, 60, 90];
+const hasAsset = name => Boolean(globalThis.Sequencer?.Database?.getEntry(name, { softFail: true }));
+
+function closestLength(name) {
+  const wanted = Number(name.match(/width-(\d+)ft/)?.[1]);
+  if (!wanted) return null;
+  const best = LINE_LENGTHS
+    .filter(n => n !== wanted)
+    .sort((a, b) => Math.abs(a - wanted) - Math.abs(b - wanted) || b - a) // tie: the longer file
+    .map(n => name.replace(/width-\d+ft/, `width-${n}ft`))
+    .find(hasAsset);
+  return best ?? null;
 }
 
 function aaWillAnimateForBlfx(entryPoint, { item, activity, effect, trigger }) {

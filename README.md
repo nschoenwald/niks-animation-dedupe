@@ -52,6 +52,10 @@ The module reads both modules' own animation lists and settings while you play, 
 your menus are picked up without an update. If an update of either module ever changes how it works inside, this
 module stops interfering and both play as usual.
 
+It also works around a Boss Loot FX bug: line animations (breath weapons, Lightning Bolt and others) that Boss Loot FX
+has no version of for a line's length, such as a 60 ft Acid Breath, play the closest length that exists instead of
+nothing.
+
 ## Settings
 
 - **Prevent double animations**: turns the module on and off.

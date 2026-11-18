@@ -2,6 +2,10 @@
 
 All notable changes to Nik's Animation Dedupe are documented in this file.
 
+## [14.2.0] - 2026-11-18
+### Fixed
+- **Boss Loot FX line animations not playing on some lengths**: Boss Loot FX picks a line animation by the length of the line, even when it has no version for that length. A 60 ft Acid Breath line then played nothing and showed an "Invalid Asset" error in the console. The closest length that exists now plays, stretched to the line. This is a workaround until Boss Loot FX fixes it, and stops doing anything once it does.
+
 ## [14.1.0] - 2026-11-17
 ### Added
 - **Choose which module has priority**: New setting *Priority*. Keep Boss Loot FX first (the default, as before), or let Automated Animations go first: then Boss Loot FX is skipped wherever Automated Animations plays an animation, including effect and condition animations. Automated Animations' own switches and its *play on damage* setting are respected.

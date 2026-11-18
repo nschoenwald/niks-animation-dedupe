@@ -268,5 +268,31 @@ for (const [name, setup, entry, args, want] of aaFirstCases) {
 settings.set('niks-animation-dedupe.priority', 'aa');
 report('A-A first: A-A is not skipped for Longsword +1', await aaPlays(attack(longsword)), true);
 
+/* ---------------- BLFX line length fix ---------------- */
+
+// The line entries blfx-assets-pack01 3.6.1 registers (scripts/resources.js).
+const assets = new Set([
+  'blfx.spell.template.line.breath_weapon1.acid.color1.width-30ft',
+  'blfx.spell.template.line.breath_weapon1.lightning.color1.width-30ft',
+  'blfx.spell.template.line.breath_weapon1.lightning.color1.width-60ft',
+  ...[10, 20, 30, 60, 90].map(n => `blfx.spell.template.line.lightning_bolt.color1.width-${n}ft`),
+]);
+globalThis.Sequencer = { Database: { getEntry: name => (assets.has(name) ? { file: name } : false) } };
+const { helperData } = await import(new URL('./helperFunctions.js', BLFX_ENTRY).href);
+const line = (anim, distance) => helperData.getAnimationForRayTemplate(`blfx.spell.template.line.${anim}`, { documentName: 'MeasuredTemplate', t: 'ray', distance });
+const lineCases = [
+  ['acid breath, 60 ft line (only 30 ft exists)', line('breath_weapon1.acid.color1.width-30ft', 60), 'breath_weapon1.acid.color1.width-30ft'],
+  ['acid breath, 30 ft line', line('breath_weapon1.acid.color1.width-30ft', 30), 'breath_weapon1.acid.color1.width-30ft'],
+  ['lightning breath, 60 ft line', line('breath_weapon1.lightning.color1.width-60ft', 60), 'breath_weapon1.lightning.color1.width-60ft'],
+  ['lightning breath, 120 ft line (no 90 ft)', line('breath_weapon1.lightning.color1.width-60ft', 120), 'breath_weapon1.lightning.color1.width-60ft'],
+  ['lightning breath, 20 ft line (no 20 ft, 30 ft closest)', line('breath_weapon1.lightning.color1.width-60ft', 20), 'breath_weapon1.lightning.color1.width-30ft'],
+  ['lightning bolt, 100 ft line (BLFX pick exists)', line('lightning_bolt.color1.width-60ft', 100), 'lightning_bolt.color1.width-90ft'],
+];
+for (const [name, got, want] of lineCases) {
+  const ok = got === `blfx.spell.template.line.${want}`;
+  if (!ok) fail++;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  Line length: ${name}: ${got.replace('blfx.spell.template.line.', '')}${ok ? '' : ` (expected ${want})`}`);
+}
+
 console.log(`\n${fail ? `${fail} FAILED` : 'All passed'}`);
 process.exit(fail ? 1 : 0);
