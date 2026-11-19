@@ -61,6 +61,10 @@ nothing.
 - **Prevent double animations**: turns the module on and off.
 - **Priority**: which module plays when both would animate the same thing: *Boss Loot FX* (default) or
   *Automated Animations*.
+- **Priority by name**: a list of items, effects or conditions that use the other module, overriding *Priority* for
+  them. Enter a name (*Witch Bolt*, *Hexenblitz*) or an identifier (*witch-bolt*); case, spaces and hyphens don't
+  matter. For effects and conditions, the effect's name, its status (*poisoned*) or the item it comes from all match.
+  Only the GM can edit the list.
 - **What counts as a duplicate**:
   - *Same activity* (default): the other module is skipped if the module with priority animates the activity at any
     moment: attack, damage, use, template or summon. This also covers one module playing on the attack roll and the

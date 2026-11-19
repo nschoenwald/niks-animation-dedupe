@@ -2,6 +2,10 @@
 
 All notable changes to Nik's Animation Dedupe are documented in this file.
 
+## [14.3.0] - 2026-11-19
+### Added
+- **Priority by name**: Pick the module that plays for specific items, effects or conditions, overriding *Priority* for them. Open the list from the module settings and enter a name (for example *Witch Bolt*) or an identifier (*witch-bolt*). Effects and conditions also match by their status or by the item they come from.
+
 ## [14.2.0] - 2026-11-18
 ### Fixed
 - **Boss Loot FX line animations not playing on some lengths**: Boss Loot FX picks a line animation by the length of the line, even when it has no version for that length. A 60 ft Acid Breath line then played nothing and showed an "Invalid Asset" error in the console. The closest length that exists now plays, stretched to the line. This is a workaround until Boss Loot FX fixes it, and stops doing anything once it does.

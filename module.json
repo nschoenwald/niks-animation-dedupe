@@ -7,7 +7,7 @@
   "download": "https://github.com/nschoenwald/niks-animation-dedupe/releases/latest/download/module.zip",
   "bugs": "https://github.com/nschoenwald/niks-animation-dedupe/issues",
   "changelog": "https://github.com/nschoenwald/niks-animation-dedupe/blob/main/CHANGELOG.md",
-  "version": "14.2.0",
+  "version": "14.3.0",
   "compatibility": {
     "minimum": "14",
     "verified": "14",
@@ -17,6 +17,9 @@
     {
       "name": "nikolai.sw"
     }
+  ],
+  "styles": [
+    "styles/niks-animation-dedupe.css"
   ],
   "esmodules": [
     "scripts/main.js"

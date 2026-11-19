@@ -1,0 +1,28 @@
+<div class="form-body">
+    <p class="hint">{{localize "NAD.Overrides.Intro" global=(localize globalLabel)}}</p>
+
+    <ol class="nad-override-list">
+        {{#each rows}}
+        <li class="nad-override">
+            <input type="text" name="match" value="{{match}}" placeholder="{{localize "NAD.Overrides.Placeholder"}}" aria-label="{{localize "NAD.Overrides.Match"}}" spellcheck="false">
+            <select name="priority" aria-label="{{localize "NAD.Overrides.Priority"}}">
+                {{selectOptions ../choices selected=priority localize=true}}
+            </select>
+            <button type="button" class="icon fa-solid fa-trash" data-action="remove" data-tooltip="NAD.Overrides.Remove" aria-label="{{localize "NAD.Overrides.Remove"}}"></button>
+        </li>
+        {{/each}}
+    </ol>
+    <p class="hint nad-override-empty" {{#if rows.length}}hidden{{/if}}>{{localize "NAD.Overrides.Empty"}}</p>
+
+    <button type="button" data-action="add"><i class="fa-solid fa-plus" inert></i> {{localize "NAD.Overrides.Add"}}</button>
+
+    <template class="nad-override-template">
+        <li class="nad-override">
+            <input type="text" name="match" value="" placeholder="{{localize "NAD.Overrides.Placeholder"}}" aria-label="{{localize "NAD.Overrides.Match"}}" spellcheck="false">
+            <select name="priority" aria-label="{{localize "NAD.Overrides.Priority"}}">
+                {{selectOptions choices selected=newPriority localize=true}}
+            </select>
+            <button type="button" class="icon fa-solid fa-trash" data-action="remove" data-tooltip="NAD.Overrides.Remove" aria-label="{{localize "NAD.Overrides.Remove"}}"></button>
+        </li>
+    </template>
+</div>

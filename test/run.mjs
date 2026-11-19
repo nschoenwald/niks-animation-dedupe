@@ -91,6 +91,7 @@ const settings = new Map(Object.entries({
   'niks-animation-dedupe.enabled': true,
   'niks-animation-dedupe.matchMode': 'activity',
   'niks-animation-dedupe.debug': false,
+  'niks-animation-dedupe.overrides': [],
 }));
 const active = new Set(['boss-loot-assets-premium', 'autoanimations', 'sequencer', 'niks-animation-dedupe']);
 const modules = new Map([...active].map(id => [id, { id, active: true }]));
@@ -99,7 +100,7 @@ globalThis.game = {
   version: '14.370',
   user: { id: 'u1', isGM: true },
   i18n: { localize: s => s, format: s => s },
-  settings: { get: (m, k) => settings.get(`${m}.${k}`), register: () => {}, set: async (m, k, v) => settings.set(`${m}.${k}`, v) },
+  settings: { get: (m, k) => settings.get(`${m}.${k}`), register: () => {}, registerMenu: () => {}, set: async (m, k, v) => settings.set(`${m}.${k}`, v) },
   modules: { get: id => modules.get(id) },
 };
 const uuids = new Map();
@@ -267,6 +268,38 @@ for (const [name, setup, entry, args, want] of aaFirstCases) {
 
 settings.set('niks-animation-dedupe.priority', 'aa');
 report('A-A first: A-A is not skipped for Longsword +1', await aaPlays(attack(longsword)), true);
+
+/* ---------------- priority by name ---------------- */
+
+const setOverrides = list => settings.set('niks-animation-dedupe.overrides', list);
+settings.set('boss-loot-assets-premium.blfxConditionAnimation', true);
+settings.set('boss-loot-assets-premium.blfxAutoRecognition', true);
+// Global A-A first, BLFX picked for some names.
+setOverrides([{ match: 'witch bolt', priority: 'blfx' }, { match: 'Bless', priority: 'blfx' }, { match: 'poisoned', priority: 'blfx' }]);
+report('By name, global A-A: "witch bolt" matches identifier witch-bolt, A-A skipped', await aaPlays(attack(witchBolt, wbAttack)), false);
+report('By name, global A-A: Bless effect matched by name, A-A skipped', await aaPlays(ae(effect({ name: 'Bless', origin: 'Item.bless', _source: { origin: 'Item.bless' } }))), false);
+report('By name, global A-A: Poisoned matched by status, A-A skipped', await aaPlays(ae(effect({ name: 'Vergiftet', statuses: ['poisoned'], parent: actor }))), false);
+report('By name, global A-A: Longsword +1 not listed, A-A plays', await aaPlays(attack(longsword)), true);
+for (const [name, entry, args, want] of [
+  ['By name, global A-A: BLFX plays its Witch Bolt beam', 'callMacro', { item: witchBolt, activity: wbAttack, effect: effect({ name: 'Sustained Lightning' }), trigger: 'afterActiveEffects' }, true],
+  ['By name, global A-A: BLFX skipped for unlisted Longsword +1', 'callMacro', { item: longsword, activity: atk(), trigger: 'afterAttack' }, false],
+]) {
+  const got = await blfxPlays(entry, args);
+  if (got !== want) fail++;
+  console.log(`${got === want ? 'PASS' : 'FAIL'}  ${name}: BLFX ${got ? 'plays' : 'skipped'}`);
+}
+// Global BLFX first, A-A picked for some names.
+settings.set('niks-animation-dedupe.priority', 'blfx');
+setOverrides([{ match: 'Longsword +1', priority: 'aa' }, { match: 'witch-bolt', priority: 'aa' }]);
+report('By name, global BLFX: Longsword +1 listed for A-A, A-A plays', await aaPlays(attack(longsword)), true);
+report('By name, global BLFX: Fireball not listed, A-A skipped', await aaPlays(template(fireball)), false);
+report('By name, global BLFX: Witch Bolt effect matched via its item, A-A plays', await aaPlays(ae(effect({ name: 'Sustained Lightning', _source: { origin: 'Item.witchBolt' } }))), true);
+{
+  const got = await blfxPlays('callMacro', { item: longsword, activity: atk(), trigger: 'afterAttack' });
+  if (got) fail++;
+  console.log(`${got ? 'FAIL' : 'PASS'}  By name, global BLFX: BLFX skipped for Longsword +1 (A-A animates it): BLFX ${got ? 'plays' : 'skipped'}`);
+}
+setOverrides([]);
 
 /* ---------------- BLFX line length fix ---------------- */
 

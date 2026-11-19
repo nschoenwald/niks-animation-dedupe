@@ -11,6 +11,11 @@
         "Blfx": "Boss Loot FX",
         "AA": "Automated Animations"
       },
+      "Overrides": {
+        "Name": "Priority by name",
+        "Hint": "Pick the module that plays for specific items, effects or conditions, overriding Priority for them.",
+        "Label": "Edit list"
+      },
       "MatchMode": {
         "Name": "What counts as a duplicate",
         "Hint": "Same activity: the other module is skipped if the module with priority animates the activity at any moment (attack, damage, use, template, summon). In this mode an effect counts as part of the activity that applies it (for example Witch Bolt's lingering lightning). Same moment only: the other module is skipped only if both would animate the exact same moment, so the other module's damage animation still plays when the module with priority only animates the attack, and effects are only compared with effects. Conditions are always compared with each other only.",
@@ -21,6 +26,16 @@
         "Name": "Debug logging",
         "Hint": "Write every skipped and allowed animation to the browser console."
       }
+    },
+    "Overrides": {
+      "Title": "Priority by name",
+      "Intro": "Each entry picks the module that plays for one item, effect or condition, instead of {global} (set under Priority). Enter its name (\"Witch Bolt\") or its identifier (\"witch-bolt\"); case, spaces and hyphens don't matter. For effects and conditions, the effect's name, its status (\"poisoned\") or the item it comes from all match.",
+      "Match": "Name or identifier",
+      "Placeholder": "Name or identifier",
+      "Priority": "Module",
+      "Remove": "Remove",
+      "Add": "Add entry",
+      "Empty": "No entries yet."
     }
   }
 }

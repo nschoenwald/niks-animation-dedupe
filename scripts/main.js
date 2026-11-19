@@ -13,6 +13,8 @@
  *   A-A's live menus through AutomatedAnimations.AutorecManager.getAutorecEntries().
  */
 
+import OverridesConfig from './apps/overrides-config.js';
+
 const ID = 'niks-animation-dedupe';
 const BLFX = 'boss-loot-assets-premium';
 const AA = 'autoanimations';
@@ -54,6 +56,20 @@ Hooks.once('init', () => {
     choices: { blfx: 'NAD.Settings.Priority.Blfx', aa: 'NAD.Settings.Priority.AA' },
     default: 'blfx',
   });
+  game.settings.register(ID, 'overrides', {
+    scope: 'world',
+    config: false,
+    type: Array,
+    default: [],
+  });
+  game.settings.registerMenu(ID, 'overridesMenu', {
+    name: 'NAD.Settings.Overrides.Name',
+    hint: 'NAD.Settings.Overrides.Hint',
+    label: 'NAD.Settings.Overrides.Label',
+    icon: 'fa-solid fa-list',
+    type: OverridesConfig,
+    restricted: true,
+  });
   game.settings.register(ID, 'matchMode', {
     name: 'NAD.Settings.MatchMode.Name',
     hint: 'NAD.Settings.MatchMode.Hint',
@@ -82,11 +98,42 @@ Hooks.once('ready', async () => {
   Hooks.on('AutomatedAnimations-WorkflowStart', onWorkflowStart);
   wrapBlfx(blfx.BlfxMacroExecutor);
   fixLineLength(blfx.helpers);
-  game.modules.get(ID).api = { blfxWillAnimate, blfxWillAnimateEffect, aaWillAnimate, aaWillAnimateEffect };
+  game.modules.get(ID).api = { blfxWillAnimate, blfxWillAnimateEffect, aaWillAnimate, aaWillAnimateEffect, priorityFor };
   console.log(`${ID} | Ready.`);
 });
 
 const blfxFirst = () => game.settings.get(ID, 'priority') !== 'aa';
+
+/* -------------------------------------------- */
+/*  Per-name priority                           */
+/* -------------------------------------------- */
+
+function overrides() {
+  const list = game.settings.get(ID, 'overrides');
+  return Array.isArray(list) ? list.filter(o => o?.match && (o.priority === 'blfx' || o.priority === 'aa')) : [];
+}
+
+// "Witch Bolt", "witch bolt" and "witch-bolt" all compare equal; non-Latin letters are kept.
+export const normalizeName = s => String(s ?? '').trim().toLowerCase().replace(/[\s_-]+/g, '-');
+
+function nameKeys(doc) {
+  if (!doc) return [];
+  return [doc.name, doc.system?.identifier, ...(doc.statuses ?? [])].filter(Boolean).map(normalizeName);
+}
+
+/**
+ * Which module plays for these documents: the first override matching a document's name,
+ * identifier or status (documents are checked in the order given), else the global setting.
+ */
+export function priorityFor(...docs) {
+  const list = overrides();
+  for (const doc of docs) {
+    const keys = nameKeys(doc);
+    const hit = keys.length && list.find(o => keys.includes(normalizeName(o.match)));
+    if (hit) return hit.priority;
+  }
+  return game.settings.get(ID, 'priority');
+}
 
 /**
  * Import BLFX's executor from the URL BLFX's own module graph used.
@@ -135,7 +182,8 @@ async function loadBlfx() {
 
 function onWorkflowStart(data, animationData) {
   if (!animationData) return; // A-A has nothing to play anyway
-  if (!game.settings.get(ID, 'enabled') || !blfxFirst()) return;
+  if (!game.settings.get(ID, 'enabled')) return;
+  if (!blfxFirst() && !overrides().length) return; // nothing can give BLFX priority
 
   // A-A awaits these before checking stopWorkflow, which lets the check be async.
   (data.deferrals ??= []).push(
@@ -149,9 +197,15 @@ function onWorkflowStart(data, animationData) {
 }
 
 async function decide(data) {
-  if (data.activeEffect) return blfxWillAnimateEffect(data.item);
+  if (data.activeEffect) {
+    const effect = data.item;
+    const item = effect.parent instanceof Item ? effect.parent : await originItem(effect);
+    if (priorityFor(effect, item) === 'aa') return false;
+    return blfxWillAnimateEffect(effect);
+  }
 
   const item = data.item;
+  if (priorityFor(item) === 'aa') return false;
   const activity = data.activity ?? null;
   const roll = data.rollAttackHook?.roll;
 
@@ -293,7 +347,7 @@ function wrapBlfx(X) {
       continue;
     }
     X[name] = async function (args = {}) {
-      if (game.settings.get(ID, 'enabled') && !blfxFirst()) {
+      if (game.settings.get(ID, 'enabled') && priorityFor(args.effect, args.item) === 'aa') {
         try {
           if (aaWillAnimateForBlfx(name, args)) {
             log('Skipping BLFX (A-A animates this):', args.item?.name ?? args.effect?.name, args.trigger ?? name, args);

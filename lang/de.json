@@ -11,6 +11,11 @@
         "Blfx": "Boss Loot FX",
         "AA": "Automated Animations"
       },
+      "Overrides": {
+        "Name": "Priorität nach Name",
+        "Hint": "Wähle für bestimmte Items, Effekte oder Zustände, welches Modul abspielt, abweichend von der Priorität.",
+        "Label": "Liste bearbeiten"
+      },
       "MatchMode": {
         "Name": "Was als doppelt gilt",
         "Hint": "Gleiche Aktivität: Das andere Modul wird übersprungen, wenn das Modul mit Priorität die Aktivität zu irgendeinem Zeitpunkt animiert (Angriff, Schaden, Einsatz, Schablone, Beschwörung). In diesem Modus gehört ein Effekt zu der Aktivität, die ihn anwendet (zum Beispiel der anhaltende Blitz von Hexenblitz). Nur gleicher Zeitpunkt: Das andere Modul wird nur übersprungen, wenn beide genau denselben Zeitpunkt animieren würden, sodass die Schadensanimation des anderen Moduls weiterhin abgespielt wird, wenn das Modul mit Priorität nur den Angriff animiert, und Effekte werden nur mit Effekten verglichen. Zustände werden immer nur miteinander verglichen.",
@@ -21,6 +26,16 @@
         "Name": "Debug-Ausgabe",
         "Hint": "Jede übersprungene und erlaubte Animation in der Browser-Konsole ausgeben."
       }
+    },
+    "Overrides": {
+      "Title": "Priorität nach Name",
+      "Intro": "Jeder Eintrag legt fest, welches Modul für ein Item, einen Effekt oder einen Zustand abspielt, statt {global} (eingestellt unter Priorität). Gib den Namen („Hexenblitz“) oder den Bezeichner („witch-bolt“) ein; Groß- und Kleinschreibung, Leerzeichen und Bindestriche spielen keine Rolle. Bei Effekten und Zuständen passen der Name des Effekts, sein Status („poisoned“) und das Item, von dem er stammt.",
+      "Match": "Name oder Bezeichner",
+      "Placeholder": "Name oder Bezeichner",
+      "Priority": "Modul",
+      "Remove": "Entfernen",
+      "Add": "Eintrag hinzufügen",
+      "Empty": "Noch keine Einträge."
     }
   }
 }
